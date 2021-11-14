@@ -5,6 +5,8 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.NoninvertibleTransformException;
 import java.util.Random;
 
+import tnn.NeuralNetwork;
+
 public class Missile {
 	XYPair location;
 	XYPair velocity;
@@ -19,9 +21,11 @@ public class Missile {
 	double gravityForce;
 	Color color;
 	double dragCoefficient;
+	double angularCorrectionCoefficient;
 	double metersPerPixel;
 	double lastUpdateTime;
 	double timeSinceUpdate;
+	XYPair collisionLocation;
 	
 	public Missile(XYPair location, Color color, double metersPerPixel) {
 		this.location = location;
@@ -31,12 +35,13 @@ public class Missile {
 		//https://en.wikipedia.org/wiki/Type_81_(missile)
 		mass = 45;
 		gravityForce = mass*9.81;
-		maxThrust = 3500; //3000
+		maxThrust = 5000; //3500
 		isThrust = false;
-		dimensions = new XYPair(0.16, 2.7);
+		dimensions = new XYPair(0.16, 2.7); //0.16, 2.7
 		velocity = new XYPair(0, 0);
 		rotation = 0;
 		dragCoefficient = 0.002; //0.002
+		angularCorrectionCoefficient = 0.000001; //0.000001
 		lastUpdateTime = System.currentTimeMillis();
 	}
 	
@@ -50,7 +55,7 @@ public class Missile {
 			double yOff = 2*Math.cos(rotation)*(dimensions.y/2);
 			XYPair thrustLoc = new XYPair(location.x + xOff/metersPerPixel, location.y + yOff/metersPerPixel);
 			Random r = new Random();
-			g.setColor(new Color(255, 151, 0, 16 + r.nextInt(239)));
+			g.setColor(new Color(255, 151, 0, r.nextInt(256)));
 			drawCenterRect(
 					g,
 					thrustLoc,
@@ -68,7 +73,7 @@ public class Missile {
 			XYPair thrustLoc = new XYPair(location.x + xOff/metersPerPixel, location.y + yOff/metersPerPixel);
 			
 			Random r = new Random();
-			g.setColor(new Color(255, 151, 0, 16 + r.nextInt(239)));
+			g.setColor(new Color(255, 151, 0, r.nextInt(256)));
 			drawCenterRect(
 					g,
 					thrustLoc,
@@ -86,7 +91,7 @@ public class Missile {
 			XYPair thrustLoc = new XYPair(location.x + xOff/metersPerPixel, location.y + yOff/metersPerPixel);
 			
 			Random r = new Random();
-			g.setColor(new Color(255, 151, 0, 16 + r.nextInt(239)));
+			g.setColor(new Color(255, 151, 0, r.nextInt(256)));
 			drawCenterRect(
 					g,
 					thrustLoc,
@@ -136,7 +141,7 @@ public class Missile {
 		dragAcc.divide(metersPerPixel);
 		dragAcc.multiply(timeSinceUpdate/1000);
 		velocity.add(dragAcc);
-		System.out.println("MACH: " + velocity.magnitude()*metersPerPixel/994.7);
+		//System.out.println("MACH: " + velocity.magnitude()*metersPerPixel/994.7); //velocity.magnitude()*metersPerPixel/994.7
 	}
 	
 	private void calculateAngularVelocity() {
@@ -157,9 +162,9 @@ public class Missile {
 		rotation += Math.PI/4;
 		
 		if(vel1 > vel2) {
-			angularVelocity -= (getCrossSectionalArea()/dimensions.x)*velocity.magnitude()/1000000;
+			angularVelocity -= (getCrossSectionalArea()/dimensions.x)*velocity.magnitude()*angularCorrectionCoefficient;
 		}else if(vel2 > vel1){
-			angularVelocity += (getCrossSectionalArea()/dimensions.x)*velocity.magnitude()/1000000;
+			angularVelocity += (getCrossSectionalArea()/dimensions.x)*velocity.magnitude()*angularCorrectionCoefficient;
 		}
 		
 		double angularVelocityDrag = (dragCoefficient/10)*Math.pow(angularVelocity, 2);
@@ -173,7 +178,7 @@ public class Missile {
 	}
 	
 	public void move() {
-		System.out.println(location.y);
+		//System.out.println(location.y);
 		location.x += velocity.x*(timeSinceUpdate/1000);
 		location.y += velocity.y*(timeSinceUpdate/1000);
 		rotation += angularVelocity*(timeSinceUpdate/1000);
@@ -190,6 +195,21 @@ public class Missile {
 		widthVector.project(perpVel);
 		return widthVector.magnitude() + lengthVector.magnitude();
 		//System.out.println(widthVector.magnitude() + lengthVector.magnitude());
+	}
+	
+	public boolean isCollide(Rect rect, Graphics2D g) {
+		Rect missRect = new Rect(
+				location.copy(),
+				new XYPair((int) Math.ceil(dimensions.x/metersPerPixel), (int) Math.ceil(dimensions.y/metersPerPixel)),
+				rotation
+				);
+		missRect.draw(g);
+		XYPair collisionPoint = missRect.getCollisionPoint(rect);
+		if(collisionPoint != null) {
+			collisionLocation = collisionPoint;
+			return true;
+		}
+		return false;
 	}
 	
 	public void drawCenterRect(Graphics2D g2d, XYPair location, int width, int length, double rotation) {

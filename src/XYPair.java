@@ -66,4 +66,8 @@ public class XYPair {
 		x = -x;
 		y = -y;
 	}
+	
+	public String toString() {
+		return "(" + x + ", " + y + ")";
+	}
 }
